@@ -1,5 +1,16 @@
 /* styles.css */
 
-* {
-	font-family: Arial;
+body {
+	margin: 1em;
+	background-color: black;
+	color: whitesmoke;
+	font-size: 5rem;
+	overflow: hidden;
+}
+
+.grid-container {
+	display: grid; 
+	/* grid-template-collumna: 1fr 1fr 1fr; */
+	grid-template-collumns: repeat(auto-fit, minmax(320px, 1fr));
+	gap: 2rem;
 }
