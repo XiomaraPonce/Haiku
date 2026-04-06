@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Haiku Tetris Assembly</title>
+  <title>Haiku Tetris</title>
   <style>
     :root {
-      --cell: 28px;
-      --cols: 26;
-      --rows: 18;
-      --board-w: calc(var(--cols) * var(--cell));
-      --board-h: calc(var(--rows) * var(--cell));
+      --cell: 24px;
+      --cols: 24;
+      --rows: 22;
+      --w: calc(var(--cols) * var(--cell));
+      --h: calc(var(--rows) * var(--cell));
     }
 
     * { box-sizing: border-box; }
@@ -20,111 +20,65 @@
       min-height: 100vh;
       display: grid;
       place-items: center;
-      background:
-        radial-gradient(circle at top, #26345e 0%, #161b33 45%, #0d1020 100%);
+      background: radial-gradient(circle at top, #24345f 0%, #11192f 45%, #090d18 100%);
       font-family: Arial, sans-serif;
-      overflow: hidden;
-      color: #fff;
+      color: white;
     }
 
     #wrap {
-      position: relative;
-      width: var(--board-w);
+      width: var(--w);
     }
 
     #title {
       text-align: center;
-      margin-bottom: 14px;
-      font-size: 14px;
-      letter-spacing: 0.12em;
+      margin-bottom: 10px;
+      font-size: 13px;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       opacity: 0.8;
     }
 
     #board {
       position: relative;
-      width: var(--board-w);
-      height: var(--board-h);
-      border: 2px solid rgba(255,255,255,0.18);
+      width: var(--w);
+      height: var(--h);
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.15);
       background:
-        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
       background-size: var(--cell) var(--cell), var(--cell) var(--cell), auto;
       box-shadow:
         0 18px 50px rgba(0,0,0,0.35),
         inset 0 0 30px rgba(255,255,255,0.04);
-      overflow: hidden;
     }
 
-    .piece {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: var(--board-w);
-      height: var(--board-h);
-      pointer-events: none;
-    }
-
-    .block {
+    .cell {
       position: absolute;
       width: var(--cell);
       height: var(--cell);
-      border: 1px solid rgba(0,0,0,0.28);
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 700;
-      font-size: 14px;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+      font-size: 13px;
+      border: 1px solid rgba(0,0,0,0.22);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.4);
       box-shadow: inset 0 0 10px rgba(255,255,255,0.12);
       user-select: none;
     }
 
-    .locked {
-      position: absolute;
-      width: var(--cell);
-      height: var(--cell);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid rgba(0,0,0,0.28);
-      font-weight: 700;
-      font-size: 14px;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
-      box-shadow: inset 0 0 10px rgba(255,255,255,0.12);
-      animation: settle 180ms ease-out;
-    }
-
-    .ghost-text {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: var(--board-w);
-      height: var(--board-h);
-      pointer-events: none;
-    }
-
-    .ghost-cell {
-      position: absolute;
-      width: var(--cell);
-      height: var(--cell);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: rgba(255,255,255,0.09);
-      font-weight: 700;
-      font-size: 14px;
-    }
-
-    @keyframes settle {
-      from { transform: scale(1.15); }
-      to { transform: scale(1); }
+    .ghost {
+      color: rgba(255,255,255,0.12);
+      border: none;
+      box-shadow: none;
+      text-shadow: none;
     }
 
     #caption {
       text-align: center;
-      margin-top: 12px;
+      margin-top: 10px;
       font-size: 13px;
       opacity: 0.72;
     }
@@ -132,134 +86,252 @@
 </head>
 <body>
   <div id="wrap">
-    <div id="title">Haiku assembling from falling tetrominoes</div>
-    <div id="board">
-      <div id="ghost" class="ghost-text"></div>
-    </div>
-    <div id="caption">The letters are the blocks.</div>
+    <div id="title">Haiku assembled by falling tetrominoes</div>
+    <div id="board"></div>
+    <div id="caption">Real grid, collisions, rotation, locking.</div>
   </div>
 
   <script>
-    const board = document.getElementById("board");
-    const ghost = document.getElementById("ghost");
+    const COLS = 24;
+    const ROWS = 22;
+    const CELL = 24;
+    const boardEl = document.getElementById("board");
 
-    const CELL = 28;
-    const COLS = 26;
-    const ROWS = 18;
-
-    const colors = [
-      "#00d1ff", "#ffcf33", "#c86bff", "#54e38e",
-      "#ff6b6b", "#5aa9ff", "#ff9b42"
+    const COLORS = [
+      "#27c9ff", "#ffd23f", "#c77dff", "#56e39f",
+      "#ff6b6b", "#5da9ff", "#ff9f43"
     ];
 
-    const haikuLines = [
-      "Divs drift through night",
-      "Tetris pieces softly fall",
-      "Code becomes a poem"
+    const haiku = [
+      "Sometimes I wonder",
+      "If I'm living correctly",
+      "Surely others too"
     ];
 
-    const poemTopRow = ROWS - 4; // leaves one empty row below as floor space feel
-    const paddedLines = haikuLines.map(line => {
-      const leftPad = Math.floor((COLS - line.length) / 2);
-      const rightPad = COLS - line.length - leftPad;
-      return " ".repeat(leftPad) + line + " ".repeat(rightPad);
-    });
+    // Grid[row][col] = null or { ch, color, hidden }
+    const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
 
-    // Show faint target text
-    paddedLines.forEach((line, rowIndex) => {
-      [...line].forEach((ch, col) => {
-        if (ch === " ") return;
-        const cell = document.createElement("div");
-        cell.className = "ghost-cell";
-        cell.style.left = `${col * CELL}px`;
-        cell.style.top = `${(poemTopRow + rowIndex) * CELL}px`;
-        cell.textContent = ch;
-        ghost.appendChild(cell);
+    // Faint target text preview
+    const targetRows = [19, 20, 21];
+    const placements = [];
+
+    function addGhostText(line, row) {
+      const startCol = Math.floor((COLS - line.length) / 2);
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === " ") continue;
+
+        const ghost = document.createElement("div");
+        ghost.className = "cell ghost";
+        ghost.textContent = ch;
+        ghost.style.left = `${(startCol + i) * CELL}px`;
+        ghost.style.top = `${row * CELL}px`;
+        boardEl.appendChild(ghost);
+      }
+    }
+
+    haiku.forEach((line, i) => addGhostText(line, targetRows[i]));
+
+    // Invisible support blocks so the centered text can stack naturally.
+    grid[21][0] = { hidden: true };
+    grid[21][1] = { hidden: true };
+    grid[21][22] = { hidden: true };
+    grid[21][23] = { hidden: true };
+
+    // Break each line into 4-letter tetromino payloads (all I-pieces).
+    function buildPlacements() {
+      let colorIndex = 0;
+
+      for (let lineIndex = 0; lineIndex < haiku.length; lineIndex++) {
+        const text = haiku[lineIndex];
+        const row = targetRows[lineIndex];
+        const startCol = Math.floor((COLS - text.length) / 2);
+
+        for (let i = 0; i < text.length; i += 4) {
+          const letters = text.slice(i, i + 4).split("");
+          placements.push({
+            targetRow: row,
+            targetCol: startCol + i,
+            letters,
+            color: COLORS[colorIndex % COLORS.length]
+          });
+          colorIndex++;
+        }
+      }
+    }
+
+    buildPlacements();
+
+    const I_SHAPES = {
+      h: [[0,0],[1,0],[2,0],[3,0]],
+      v: [[0,0],[0,1],[0,2],[0,3]]
+    };
+
+    let currentPiece = null;
+    let placementIndex = 0;
+    let tick = 0;
+    let finished = false;
+
+    function pieceCells(piece, x = piece.x, y = piece.y, rot = piece.rot) {
+      const shape = I_SHAPES[rot];
+      return shape.map(([dx, dy], i) => ({
+        x: x + dx,
+        y: y + dy,
+        ch: piece.letters[i]
+      }));
+    }
+
+    function collides(piece, x = piece.x, y = piece.y, rot = piece.rot) {
+      return pieceCells(piece, x, y, rot).some(cell => {
+        if (cell.x < 0 || cell.x >= COLS || cell.y >= ROWS) return true;
+        if (cell.y < 0) return false;
+        return grid[cell.y][cell.x] !== null;
       });
-    });
-
-    // Collect target cells for the poem, left-to-right, top-to-bottom.
-    const targets = [];
-    paddedLines.forEach((line, rowIndex) => {
-      [...line].forEach((ch, colIndex) => {
-        if (ch === " ") return;
-        targets.push({
-          row: poemTopRow + rowIndex,
-          col: colIndex,
-          char: ch
-        });
-      });
-    });
-
-    function colorForIndex(i) {
-      return colors[i % colors.length];
     }
 
-    function createAnimatedPiece(group, groupIndex) {
-      const piece = document.createElement("div");
-      piece.className = "piece";
-
-      const spawnCol = Math.floor(Math.random() * (COLS - 4));
-      const spawnY = -4;
-
-      group.forEach((cellData, i) => {
-        const block = document.createElement("div");
-        block.className = "block";
-        block.textContent = cellData.char;
-        block.style.background = colorForIndex(groupIndex);
-        block.style.left = `${spawnCol * CELL}px`;
-        block.style.top = `${(spawnY + i) * CELL}px`;
-
-        piece.appendChild(block);
-
-        // Animate each letter-block to its final board cell.
-        const dx = (cellData.col - spawnCol) * CELL;
-        const dy = (cellData.row - (spawnY + i)) * CELL;
-        block.animate(
-          [
-            { transform: "translate(0px, 0px) rotate(0deg)" },
-            { transform: `translate(${dx}px, ${dy}px) rotate(0deg)` }
-          ],
-          {
-            duration: 1200 + Math.random() * 300,
-            easing: "cubic-bezier(.2,.8,.2,1)",
-            fill: "forwards"
-          }
-        );
-      });
-
-      board.appendChild(piece);
-
-      setTimeout(() => {
-        group.forEach((cellData) => {
-          const locked = document.createElement("div");
-          locked.className = "locked";
-          locked.textContent = cellData.char;
-          locked.style.left = `${cellData.col * CELL}px`;
-          locked.style.top = `${cellData.row * CELL}px`;
-          locked.style.background = colorForIndex(groupIndex);
-          board.appendChild(locked);
-        });
-
-        piece.remove();
-      }, 1450);
+    function move(piece, dx, dy) {
+      if (!collides(piece, piece.x + dx, piece.y + dy, piece.rot)) {
+        piece.x += dx;
+        piece.y += dy;
+        return true;
+      }
+      return false;
     }
 
-    // Split the poem into groups of 4 letters so each drop feels like a tetromino.
-    const groups = [];
-    for (let i = 0; i < targets.length; i += 4) {
-      groups.push(targets.slice(i, i + 4));
+    function rotate(piece) {
+      const nextRot = piece.rot === "v" ? "h" : "v";
+      const kicks = [0, -1, 1, -2, 2];
+
+      for (const kick of kicks) {
+        const nx = piece.x + kick;
+        if (!collides(piece, nx, piece.y, nextRot)) {
+          piece.x = nx;
+          piece.rot = nextRot;
+          return true;
+        }
+      }
+      return false;
     }
 
-    let current = 0;
-    function dropNextGroup() {
-      if (current >= groups.length) return;
-      createAnimatedPiece(groups[current], current);
-      current++;
-      setTimeout(dropNextGroup, 320);
+    function lockPiece(piece) {
+      for (const cell of pieceCells(piece)) {
+        if (cell.y >= 0) {
+          grid[cell.y][cell.x] = {
+            ch: cell.ch,
+            color: piece.color,
+            hidden: false
+          };
+        }
+      }
+      currentPiece = null;
+
+      if (placementIndex >= placements.length) {
+        finished = true;
+      }
     }
 
-    dropNextGroup();
+    function spawnPiece() {
+      if (placementIndex >= placements.length) return;
+
+      const plan = placements[placementIndex++];
+      currentPiece = {
+        x: Math.floor(Math.random() * COLS),
+        y: -4,
+        rot: "v",
+        letters: plan.letters,
+        color: plan.color,
+        targetCol: plan.targetCol,
+        targetRow: plan.targetRow
+      };
+
+      // Keep spawn legal.
+      while (collides(currentPiece) && currentPiece.x > 0) {
+        currentPiece.x--;
+      }
+    }
+
+    function aiStep(piece) {
+      // Rotate to horizontal shortly before landing.
+      if (piece.rot === "v" && piece.y >= piece.targetRow - 4) {
+        rotate(piece);
+      } else if (piece.rot === "v" && tick % 8 === 0) {
+        // occasional early rotation attempts for visible motion
+        rotate(piece);
+        if (piece.rot === "h") rotate(piece); // often rotate back
+      }
+
+      // Once horizontal, steer toward the target column.
+      if (piece.rot === "h") {
+        if (piece.x < piece.targetCol) move(piece, 1, 0);
+        else if (piece.x > piece.targetCol) move(piece, -1, 0);
+      } else {
+        // While vertical, drift generally toward target.
+        const targetX = piece.targetCol + 1;
+        if (piece.x < targetX) move(piece, 1, 0);
+        else if (piece.x > targetX) move(piece, -1, 0);
+      }
+
+      // Make sure it's horizontal before final settle.
+      if (piece.y >= piece.targetRow - 2 && piece.rot !== "h") {
+        rotate(piece);
+      }
+
+      // Gravity
+      if (!move(piece, 0, 1)) {
+        lockPiece(piece);
+      }
+    }
+
+    function draw() {
+      boardEl.querySelectorAll(".live, .locked").forEach(el => el.remove());
+
+      // locked grid
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const cell = grid[y][x];
+          if (!cell || cell.hidden) continue;
+
+          const el = document.createElement("div");
+          el.className = "cell locked";
+          el.textContent = cell.ch;
+          el.style.left = `${x * CELL}px`;
+          el.style.top = `${y * CELL}px`;
+          el.style.background = cell.color;
+          boardEl.appendChild(el);
+        }
+      }
+
+      // live piece
+      if (currentPiece) {
+        for (const cell of pieceCells(currentPiece)) {
+          if (cell.y < 0) continue;
+          const el = document.createElement("div");
+          el.className = "cell live";
+          el.textContent = cell.ch;
+          el.style.left = `${cell.x * CELL}px`;
+          el.style.top = `${cell.y * CELL}px`;
+          el.style.background = currentPiece.color;
+          boardEl.appendChild(el);
+        }
+      }
+    }
+
+    function loop() {
+      tick++;
+
+      if (!currentPiece && !finished) {
+        spawnPiece();
+      }
+
+      if (currentPiece) {
+        aiStep(currentPiece);
+      }
+
+      draw();
+      requestAnimationFrame(() => setTimeout(loop, 90));
+    }
+
+    loop();
   </script>
 </body>
 </html>
