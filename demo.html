@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Haiku Tetris</title>
+  <title>Tetris Message Board</title>
   <style>
     :root {
-      --cell: 24px;
-      --cols: 26;
+      --cols: 18;
       --rows: 22;
-      --w: calc(var(--cols) * var(--cell));
-      --h: calc(var(--rows) * var(--cell));
+      --cell: 28px;
+      --board-w: calc(var(--cols) * var(--cell));
+      --board-h: calc(var(--rows) * var(--cell));
     }
 
     * { box-sizing: border-box; }
@@ -20,40 +20,46 @@
       min-height: 100vh;
       display: grid;
       place-items: center;
-      background: radial-gradient(circle at top, #24345f 0%, #11192f 45%, #090d18 100%);
+      background: radial-gradient(circle at top, #20304f 0%, #111827 55%, #090d14 100%);
       font-family: Arial, sans-serif;
     }
 
     #board {
       position: relative;
-      width: var(--w);
-      height: var(--h);
-      overflow: hidden;
-      border: 2px solid rgba(255,255,255,0.15);
+      width: var(--board-w);
+      height: var(--board-h);
+      border: 2px solid rgba(255,255,255,0.14);
       background:
-        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+        linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
       background-size: var(--cell) var(--cell), var(--cell) var(--cell), auto;
       box-shadow:
-        0 18px 50px rgba(0,0,0,0.35),
-        inset 0 0 30px rgba(255,255,255,0.04);
+        0 20px 60px rgba(0,0,0,0.35),
+        inset 0 0 28px rgba(255,255,255,0.04);
+      overflow: hidden;
     }
 
     .cell {
       position: absolute;
       width: var(--cell);
       height: var(--cell);
+      border: 1px solid rgba(0,0,0,0.25);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
-      font-size: 13px;
       color: white;
-      border: 1px solid rgba(0,0,0,0.22);
+      font-weight: 700;
       text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-      box-shadow: inset 0 0 10px rgba(255,255,255,0.12);
+      box-shadow: inset 0 0 10px rgba(255,255,255,0.14);
       user-select: none;
+      line-height: 1;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .flash {
+      filter: brightness(1.8);
     }
   </style>
 </head>
@@ -61,412 +67,417 @@
   <div id="board"></div>
 
   <script>
-    const COLS = 26;
+    const COLS = 18;
     const ROWS = 22;
-    const CELL = 24;
+    const CELL = 28;
     const boardEl = document.getElementById("board");
 
-    const COLORS = [
-      "#27c9ff", "#ffd23f", "#c77dff", "#56e39f",
-      "#ff6b6b", "#5da9ff", "#ff9f43", "#8ce99a"
+    const COLORS = {
+      I: "#27C9FF",
+      O: "#FFD23F",
+      T: "#B57BFF",
+      S: "#56E39F",
+      Z: "#FF6B6B",
+      J: "#5DA9FF",
+      L: "#FF9F43"
+    };
+
+    const BAG_TYPES = ["I","O","T","S","Z","J","L"];
+    const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    const PIECES = {
+      I: [
+        [[0,1],[1,1],[2,1],[3,1]],
+        [[2,0],[2,1],[2,2],[2,3]],
+        [[0,2],[1,2],[2,2],[3,2]],
+        [[1,0],[1,1],[1,2],[1,3]]
+      ],
+      O: [
+        [[1,0],[2,0],[1,1],[2,1]],
+        [[1,0],[2,0],[1,1],[2,1]],
+        [[1,0],[2,0],[1,1],[2,1]],
+        [[1,0],[2,0],[1,1],[2,1]]
+      ],
+      T: [
+        [[1,0],[0,1],[1,1],[2,1]],
+        [[1,0],[1,1],[2,1],[1,2]],
+        [[0,1],[1,1],[2,1],[1,2]],
+        [[1,0],[0,1],[1,1],[1,2]]
+      ],
+      S: [
+        [[1,0],[2,0],[0,1],[1,1]],
+        [[1,0],[1,1],[2,1],[2,2]],
+        [[1,1],[2,1],[0,2],[1,2]],
+        [[0,0],[0,1],[1,1],[1,2]]
+      ],
+      Z: [
+        [[0,0],[1,0],[1,1],[2,1]],
+        [[2,0],[1,1],[2,1],[1,2]],
+        [[0,1],[1,1],[1,2],[2,2]],
+        [[1,0],[0,1],[1,1],[0,2]]
+      ],
+      J: [
+        [[0,0],[0,1],[1,1],[2,1]],
+        [[1,0],[2,0],[1,1],[1,2]],
+        [[0,1],[1,1],[2,1],[2,2]],
+        [[1,0],[1,1],[0,2],[1,2]]
+      ],
+      L: [
+        [[2,0],[0,1],[1,1],[2,1]],
+        [[1,0],[1,1],[1,2],[2,2]],
+        [[0,1],[1,1],[2,1],[0,2]],
+        [[0,0],[1,0],[1,1],[1,2]]
+      ]
+    };
+
+    const FINAL_MESSAGE = [
+      ["S","O","M","E","T","I","M","E","S","","I","","W","O","N","D","E","R"],
+      ["","IF","","I'M","","LI","VI","NG","","CO","RR","EC","TL","Y","","","",""],
+      ["","S","U","R","E","L","Y","","O","T","H","E","R","S","","T","O","O"]
     ];
 
-    const haiku = [
-      "Sometimes I wonder",
-      "If I'm living correctly",
-      "Surely others too"
-    ];
-
-    const targetRows = [19, 20, 21];
-
-    const board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-    const support = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
-
-    const SHAPES = [
-      { name: "D2", cells: [[0,0],[1,0]] },
-
-      { name: "I3", cells: [[0,0],[1,0],[2,0]] },
-      { name: "L3", cells: [[0,0],[0,1],[1,1]] },
-
-      { name: "O4", cells: [[0,0],[1,0],[0,1],[1,1]] },
-      { name: "I4", cells: [[0,0],[1,0],[2,0],[3,0]] },
-      { name: "T4", cells: [[0,0],[1,0],[2,0],[1,1]] },
-      { name: "L4", cells: [[0,0],[0,1],[0,2],[1,2]] },
-
-      { name: "Wide4_5", cells: [[0,0],[1,0],[2,0],[3,0],[0,1]] },
-      { name: "I5", cells: [[0,0],[1,0],[2,0],[3,0],[4,0]] },
-      { name: "T5", cells: [[0,0],[1,0],[2,0],[1,1],[1,2]] },
-      { name: "U5", cells: [[0,0],[2,0],[0,1],[1,1],[2,1]] },
-
-      { name: "Wide5_6", cells: [[0,0],[1,0],[2,0],[3,0],[4,0],[0,1]] },
-      { name: "I6", cells: [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0]] },
-      { name: "Rect6", cells: [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]] }
-    ];
-
-    function normalizeBlocks(blocks) {
-      const minX = Math.min(...blocks.map(b => b.x));
-      const minY = Math.min(...blocks.map(b => b.y));
-      return blocks.map(b => ({ ...b, x: b.x - minX, y: b.y - minY }));
+    function emptyBoard() {
+      return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     }
 
-    function rotateCW(blocks) {
-      return normalizeBlocks(
-        blocks.map(b => ({ ...b, x: b.y, y: -b.x }))
-      );
+    function cloneBoard(board) {
+      return board.map(row => row.map(cell => cell ? { ...cell } : null));
     }
 
-    function sameFootprint(a, b) {
-      if (a.length !== b.length) return false;
-      const sa = a.map(c => `${c.x},${c.y}`).sort().join("|");
-      const sb = b.map(c => `${c.x},${c.y}`).sort().join("|");
-      return sa === sb;
+    function randInt(n) {
+      return Math.floor(Math.random() * n);
     }
 
-    function uniqueRotations(baseCells) {
-      const rotations = [];
-      let current = normalizeBlocks(baseCells.map(([x, y]) => ({ x, y })));
-
-      for (let i = 0; i < 4; i++) {
-        if (!rotations.some(r => sameFootprint(r, current))) {
-          rotations.push(current.map(c => ({ x: c.x, y: c.y })));
-        }
-        current = rotateCW(current);
-      }
-
-      return rotations;
+    function randomLetter() {
+      return LETTERS[randInt(LETTERS.length)];
     }
 
-    function bottomInfo(cells) {
-      const maxY = Math.max(...cells.map(c => c.y));
-      const bottom = cells
-        .filter(c => c.y === maxY)
-        .map(c => c.x)
-        .sort((a, b) => a - b);
-
-      const contiguous = bottom.every((x, i) => i === 0 || x === bottom[i - 1] + 1);
-
-      return {
-        maxY,
-        bottomXs: bottom,
-        count: bottom.length,
-        contiguous,
-        minBottomX: bottom[0]
-      };
+    function randomLetters(n = 4) {
+      return Array.from({ length: n }, () => randomLetter());
     }
 
-    const CANDIDATES_BY_TEXT_WIDTH = { 2: [], 3: [], 4: [], 5: [], 6: [] };
-
-    for (const shape of SHAPES) {
-      const rots = uniqueRotations(shape.cells);
-
-      rots.forEach((rot, rotIndex) => {
-        const info = bottomInfo(rot);
-        if (info.contiguous && info.count >= 2 && info.count <= 6) {
-          CANDIDATES_BY_TEXT_WIDTH[info.count].push({
-            name: shape.name,
-            rotations: rots,
-            targetRotationIndex: rotIndex,
-            targetCells: rot
-          });
-        }
-      });
-    }
-
-    function rand(arr) {
-      return arr[Math.floor(Math.random() * arr.length)];
-    }
-
-    function weightedChunkSize(remaining) {
-      const options = [2, 3, 4, 5, 6].filter(n => n <= remaining && remaining - n !== 1);
-
-      const weights = options.map(n => {
-        if (remaining > 10) {
-          if (n === 2) return 4;
-          if (n === 3) return 5;
-          if (n === 4) return 4;
-          if (n === 5) return 2;
-          return 1;
-        }
-        if (n === 2) return 3;
-        if (n === 3) return 4;
-        if (n === 4) return 3;
-        if (n === 5) return 2;
-        return 1;
-      });
-
-      const total = weights.reduce((a, b) => a + b, 0);
-      let r = Math.random() * total;
-
-      for (let i = 0; i < options.length; i++) {
-        r -= weights[i];
-        if (r <= 0) return options[i];
-      }
-
-      return options[0];
-    }
-
-    function chunkLine(line) {
-      const chunks = [];
-      let i = 0;
-
-      while (i < line.length) {
-        const remaining = line.length - i;
-        const size = weightedChunkSize(remaining);
-        chunks.push({
-          text: line.slice(i, i + size),
-          start: i,
-          size
-        });
-        i += size;
-      }
-
-      return chunks;
-    }
-
-    const lines = haiku.map((text, index) => {
-      const startCol = Math.floor((COLS - text.length) / 2);
-      return {
-        index,
-        text,
-        row: targetRows[index],
-        startCol,
-        chunks: chunkLine(text)
-      };
-    });
-
-    const placements = [];
-    const spawnOrder = [2, 1, 0];
-
-    for (const lineIndex of spawnOrder) {
-      const line = lines[lineIndex];
-
-      line.chunks.forEach(chunk => {
-        const candidate = rand(CANDIDATES_BY_TEXT_WIDTH[chunk.size]);
-        const info = bottomInfo(candidate.targetCells);
-
-        const targetX = line.startCol + chunk.start - info.minBottomX;
-        const targetY = line.row - info.maxY;
-
-        const targetBlocks = candidate.targetCells.map(c => ({
-          x: c.x,
-          y: c.y,
-          ch: ""
-        }));
-
-        const bottomBlocks = targetBlocks
-          .filter(b => b.y === info.maxY)
-          .sort((a, b) => a.x - b.x);
-
-        chunk.text.split("").forEach((ch, i) => {
-          bottomBlocks[i].ch = ch;
-        });
-
-        placements.push({
-          lineIndex,
-          color: COLORS[placements.length % COLORS.length],
-          rotations: candidate.rotations,
-          targetBlocks,
-          targetX,
-          targetY
-        });
-      });
-    }
-
-    const pieceCountByLine = {};
-    const lockedCountByLine = {};
-    lines.forEach(line => {
-      pieceCountByLine[line.index] = line.chunks.length;
-      lockedCountByLine[line.index] = 0;
-    });
-
-    let currentPiece = null;
-    let placementIndex = 0;
-    let finished = false;
-    let tick = 0;
-
-    function widthOf(blocks) {
-      return Math.max(...blocks.map(b => b.x)) + 1;
-    }
-
-    function heightOf(blocks) {
-      return Math.max(...blocks.map(b => b.y)) + 1;
-    }
-
-    function cloneBlocks(blocks) {
-      return blocks.map(b => ({ x: b.x, y: b.y, ch: b.ch }));
-    }
-
-    function translateCells(piece, blocks = piece.blocks, x = piece.x, y = piece.y) {
-      return blocks.map(b => ({
-        x: x + b.x,
-        y: y + b.y,
-        ch: b.ch
+    function cellsFor(type, rot, x, y, labels) {
+      return PIECES[type][rot].map(([dx, dy], i) => ({
+        x: x + dx,
+        y: y + dy,
+        label: labels[i] ?? "",
+        color: COLORS[type]
       }));
     }
 
-    function blocked(x, y) {
-      if (x < 0 || x >= COLS || y >= ROWS) return true;
-      if (y < 0) return false;
-      return !!board[y][x] || support[y][x];
-    }
-
-    function canPlace(piece, blocks = piece.blocks, x = piece.x, y = piece.y) {
-      return translateCells(piece, blocks, x, y).every(cell => !blocked(cell.x, cell.y));
-    }
-
-    function move(piece, dx, dy) {
-      if (canPlace(piece, piece.blocks, piece.x + dx, piece.y + dy)) {
-        piece.x += dx;
-        piece.y += dy;
-        return true;
+    function fits(board, type, rot, x, y) {
+      const cells = PIECES[type][rot];
+      for (const [dx, dy] of cells) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= COLS || ny >= ROWS) return false;
+        if (ny >= 0 && board[ny][nx]) return false;
       }
-      return false;
+      return true;
     }
 
-    function tryRotateCW(piece) {
-      const rotated = rotateCW(piece.blocks);
-      const kicks = [0, -1, 1, -2, 2];
-
-      for (const kick of kicks) {
-        if (canPlace(piece, rotated, piece.x + kick, piece.y)) {
-          piece.blocks = rotated;
-          piece.x += kick;
-          return true;
-        }
-      }
-
-      return false;
+    function hardDropY(board, type, rot, x) {
+      let y = -4;
+      while (fits(board, type, rot, x, y + 1)) y++;
+      return y;
     }
 
-    function blocksMatchTarget(piece) {
-      return sameFootprint(
-        normalizeBlocks(piece.blocks.map(b => ({ x: b.x, y: b.y }))),
-        normalizeBlocks(piece.targetBlocks.map(b => ({ x: b.x, y: b.y })))
-      );
-    }
+    function placePiece(board, type, rot, x, y, labels) {
+      const next = cloneBoard(board);
+      const placedCells = cellsFor(type, rot, x, y, labels);
 
-    function supportLineFor(lineIndexAbove, supportRow) {
-      const line = lines[lineIndexAbove];
-      for (let x = line.startCol; x < line.startCol + line.text.length; x++) {
-        if (!board[supportRow][x]) {
-          support[supportRow][x] = true;
-        }
-      }
-    }
-
-    function onLineCompleted(lineIndex) {
-      if (lineIndex === 2) supportLineFor(1, 21);
-      if (lineIndex === 1) supportLineFor(0, 20);
-    }
-
-    function lockPiece(piece) {
-      const cells = translateCells(piece);
-
-      for (const cell of cells) {
-        if (cell.y >= 0 && cell.y < ROWS && cell.x >= 0 && cell.x < COLS) {
-          board[cell.y][cell.x] = {
-            ch: cell.ch,
-            color: piece.color
+      for (const cell of placedCells) {
+        if (cell.y >= 0) {
+          next[cell.y][cell.x] = {
+            label: cell.label,
+            color: cell.color
           };
         }
       }
 
-      lockedCountByLine[piece.lineIndex]++;
-
-      if (lockedCountByLine[piece.lineIndex] === pieceCountByLine[piece.lineIndex]) {
-        onLineCompleted(piece.lineIndex);
-      }
-
-      currentPiece = null;
-      if (placementIndex >= placements.length) finished = true;
+      return next;
     }
 
-    function spawnPiece() {
-      if (placementIndex >= placements.length) return;
-
-      const plan = placements[placementIndex++];
-
-      let spawnBlocks = cloneBlocks(plan.targetBlocks);
-      const randomTurns = Math.floor(Math.random() * 4);
-      for (let i = 0; i < randomTurns; i++) {
-        spawnBlocks = rotateCW(spawnBlocks);
+    function findFullRows(board) {
+      const rows = [];
+      for (let y = 0; y < ROWS; y++) {
+        if (board[y].every(cell => cell !== null)) rows.push(y);
       }
-
-      const spawnWidth = widthOf(spawnBlocks);
-      const spawnHeight = heightOf(spawnBlocks);
-
-      const offsetChoices = [-5, -4, -3, 3, 4, 5, -2, 2, -1, 1, 0];
-      let spawnX = plan.targetX + rand(offsetChoices);
-      spawnX = Math.max(0, Math.min(COLS - spawnWidth, spawnX));
-
-      currentPiece = {
-        lineIndex: plan.lineIndex,
-        color: plan.color,
-        rotations: plan.rotations,
-        targetBlocks: cloneBlocks(plan.targetBlocks),
-        targetX: plan.targetX,
-        targetY: plan.targetY,
-        x: spawnX,
-        y: -spawnHeight - 1,
-        blocks: spawnBlocks
-      };
-
-      while (!canPlace(currentPiece) && currentPiece.x > 0) {
-        currentPiece.x--;
-      }
+      return rows;
     }
 
-    function aiStep(piece) {
-      const centerNow = piece.x + piece.blocks.reduce((s, b) => s + b.x, 0) / piece.blocks.length;
-      const centerTarget = piece.targetX + piece.targetBlocks.reduce((s, b) => s + b.x, 0) / piece.targetBlocks.length;
+    function clearRows(board, rowsToClear) {
+      const next = cloneBoard(board);
+      const set = new Set(rowsToClear);
+      const kept = [];
 
-      const nearLanding = piece.y >= piece.targetY - 5;
-      const alignedX = piece.x === piece.targetX;
-      const alignedShape = blocksMatchTarget(piece);
-
-      if (nearLanding && !alignedShape) {
-        tryRotateCW(piece);
+      for (let y = 0; y < ROWS; y++) {
+        if (!set.has(y)) kept.push(next[y]);
       }
 
-      if (Math.abs(centerNow - centerTarget) > 0.2) {
-        if (centerNow < centerTarget) move(piece, 1, 0);
-        else move(piece, -1, 0);
+      while (kept.length < ROWS) {
+        kept.unshift(Array(COLS).fill(null));
       }
 
-      if (nearLanding && alignedShape && !alignedX) {
-        if (piece.x < piece.targetX) move(piece, 1, 0);
-        else if (piece.x > piece.targetX) move(piece, -1, 0);
-      }
+      return kept;
+    }
 
-      const shouldHover = nearLanding && (!blocksMatchTarget(piece) || piece.x !== piece.targetX);
-
-      if (!shouldHover || tick % 2 === 0) {
-        if (!move(piece, 0, 1)) {
-          lockPiece(piece);
+    function columnHeights(board) {
+      const heights = Array(COLS).fill(0);
+      for (let x = 0; x < COLS; x++) {
+        for (let y = 0; y < ROWS; y++) {
+          if (board[y][x]) {
+            heights[x] = ROWS - y;
+            break;
+          }
         }
       }
+      return heights;
     }
 
-    function draw() {
+    function countHoles(board) {
+      let holes = 0;
+      for (let x = 0; x < COLS; x++) {
+        let seenBlock = false;
+        for (let y = 0; y < ROWS; y++) {
+          if (board[y][x]) seenBlock = true;
+          else if (seenBlock) holes++;
+        }
+      }
+      return holes;
+    }
+
+    function stackHeight(board) {
+      for (let y = 0; y < ROWS; y++) {
+        if (board[y].some(Boolean)) return ROWS - y;
+      }
+      return 0;
+    }
+
+    function bestPlacement(board, type) {
+      let best = null;
+
+      for (let rot = 0; rot < 4; rot++) {
+        let minX = Infinity;
+        let maxX = -Infinity;
+        for (const [dx] of PIECES[type][rot]) {
+          minX = Math.min(minX, dx);
+          maxX = Math.max(maxX, dx);
+        }
+
+        for (let x = -minX; x <= COLS - 1 - maxX; x++) {
+          if (!fits(board, type, rot, x, -4)) continue;
+
+          const y = hardDropY(board, type, rot, x);
+          const letters = ["A","B","C","D"];
+          const afterPlace = placePiece(board, type, rot, x, y, letters);
+          const fullRows = findFullRows(afterPlace);
+          const afterClear = clearRows(afterPlace, fullRows);
+
+          const heights = columnHeights(afterClear);
+          const aggregateHeight = heights.reduce((a, b) => a + b, 0);
+          const bumpiness = heights.slice(1).reduce((sum, h, i) => sum + Math.abs(h - heights[i]), 0);
+          const holes = countHoles(afterClear);
+          const cleared = fullRows.length;
+
+          const score =
+            cleared * 10000
+            - aggregateHeight * 5
+            - holes * 40
+            - bumpiness * 6
+            + Math.random() * 10;
+
+          if (!best || score > best.score) {
+            best = { type, rot, x, y, score };
+          }
+        }
+      }
+
+      return best;
+    }
+
+    function makeBag() {
+      const bag = [...BAG_TYPES];
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = randInt(i + 1);
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+      return bag;
+    }
+
+    function simulatePrelude() {
+      for (let attempt = 0; attempt < 25; attempt++) {
+        let board = emptyBoard();
+        let bag = [];
+        const actions = [];
+        let sawFourRows = false;
+
+        for (let step = 0; step < 80; step++) {
+          if (bag.length === 0) bag = makeBag();
+
+          const type = bag.pop();
+          const best = bestPlacement(board, type);
+          if (!best) break;
+
+          const labels = randomLetters(4);
+          const beforeClear = placePiece(board, type, best.rot, best.x, best.y, labels);
+          const clearedRows = findFullRows(beforeClear);
+
+          if (stackHeight(beforeClear) >= 4) {
+            sawFourRows = true;
+          }
+
+          const afterClear = clearRows(beforeClear, clearedRows);
+
+          actions.push({
+            type,
+            rot: best.rot,
+            x: best.x,
+            y: best.y,
+            labels,
+            boardAfterLock: beforeClear,
+            clearedRows,
+            boardAfterClear: afterClear
+          });
+
+          board = afterClear;
+
+          if (sawFourRows && clearedRows.length === 1) {
+            return actions;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    function makeMessageBoard() {
+      const board = emptyBoard();
+      const startRow = ROWS - 3;
+      let colorIndex = 0;
+      const palette = ["#27C9FF", "#B57BFF", "#56E39F", "#FFD23F", "#FF6B6B", "#5DA9FF", "#FF9F43"];
+
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const text = FINAL_MESSAGE[r][c];
+          if (!text) continue;
+          board[startRow + r][c] = {
+            label: text.toUpperCase(),
+            color: palette[colorIndex % palette.length]
+          };
+          colorIndex++;
+        }
+      }
+
+      return board;
+    }
+
+    let worldBoard = emptyBoard();
+    const preludeActions = simulatePrelude();
+    let currentActionIndex = 0;
+    let livePiece = null;
+    let flashRows = [];
+    let flashTimer = 0;
+    let phase = preludeActions ? "DROP" : "MESSAGE_WAIT";
+    let pauseTimer = 0;
+    const messageBoard = makeMessageBoard();
+
+    function spawnNextActionPiece() {
+      if (!preludeActions || currentActionIndex >= preludeActions.length) {
+        phase = "MESSAGE_WAIT";
+        pauseTimer = 24;
+        livePiece = null;
+        return;
+      }
+
+      const action = preludeActions[currentActionIndex];
+      livePiece = {
+        ...action,
+        drawY: -4
+      };
+    }
+
+    function update() {
+      if (phase === "DROP") {
+        if (!livePiece) {
+          spawnNextActionPiece();
+          return;
+        }
+
+        if (livePiece.drawY < livePiece.y) {
+          livePiece.drawY += 1;
+        } else {
+          worldBoard = cloneBoard(livePiece.boardAfterLock);
+
+          if (livePiece.clearedRows.length) {
+            flashRows = [...livePiece.clearedRows];
+            flashTimer = 10;
+            phase = "FLASH";
+          } else {
+            currentActionIndex++;
+            livePiece = null;
+          }
+        }
+      } else if (phase === "FLASH") {
+        flashTimer--;
+        if (flashTimer <= 0) {
+          worldBoard = cloneBoard(preludeActions[currentActionIndex].boardAfterClear);
+          currentActionIndex++;
+          livePiece = null;
+
+          if (currentActionIndex >= preludeActions.length) {
+            phase = "MESSAGE_WAIT";
+            pauseTimer = 24;
+          } else {
+            phase = "DROP";
+          }
+        }
+      } else if (phase === "MESSAGE_WAIT") {
+        pauseTimer--;
+        if (pauseTimer <= 0) {
+          worldBoard = emptyBoard();
+          phase = "MESSAGE_REVEAL";
+          pauseTimer = 0;
+        }
+      } else if (phase === "MESSAGE_REVEAL") {
+        worldBoard = cloneBoard(messageBoard);
+        phase = "DONE";
+      }
+    }
+
+    function render() {
       boardEl.innerHTML = "";
 
       for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
-          const cell = board[y][x];
+          const cell = worldBoard[y][x];
           if (!cell) continue;
 
           const el = document.createElement("div");
           el.className = "cell";
+          if (flashRows.includes(y) && phase === "FLASH") {
+            el.classList.add("flash");
+          }
           el.style.left = `${x * CELL}px`;
           el.style.top = `${y * CELL}px`;
           el.style.background = cell.color;
-          el.textContent = cell.ch || "";
+
+          const len = cell.label.length;
+          el.style.fontSize = len >= 3 ? "9px" : len === 2 ? "11px" : "14px";
+          el.textContent = cell.label.toUpperCase();
+
           boardEl.appendChild(el);
         }
       }
 
-      if (currentPiece) {
-        const cells = translateCells(currentPiece);
+      if (livePiece && phase === "DROP") {
+        const cells = cellsFor(
+          livePiece.type,
+          livePiece.rot,
+          livePiece.x,
+          livePiece.drawY,
+          livePiece.labels.map(s => s.toUpperCase())
+        );
 
         for (const cell of cells) {
           if (cell.y < 0) continue;
@@ -475,29 +486,22 @@
           el.className = "cell";
           el.style.left = `${cell.x * CELL}px`;
           el.style.top = `${cell.y * CELL}px`;
-          el.style.background = currentPiece.color;
-          el.textContent = cell.ch || "";
+          el.style.background = cell.color;
+          el.style.fontSize = "14px";
+          el.textContent = cell.label.toUpperCase();
           boardEl.appendChild(el);
         }
       }
     }
 
     function loop() {
-      tick++;
-
-      if (!currentPiece && !finished) {
-        spawnPiece();
-      }
-
-      if (currentPiece) {
-        aiStep(currentPiece);
-      }
-
-      draw();
+      update();
+      render();
+      requestAnimationFrame(() => setTimeout(loop, 70));
     }
 
-    draw();
-    setInterval(loop, 90);
+    render();
+    loop();
   </script>
 </body>
 </html>
