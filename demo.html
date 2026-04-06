@@ -22,7 +22,6 @@
       place-items: center;
       background: radial-gradient(circle at top, #24345f 0%, #11192f 45%, #090d18 100%);
       font-family: Arial, sans-serif;
-      color: white;
     }
 
     #board {
@@ -50,6 +49,7 @@
       justify-content: center;
       font-weight: 700;
       font-size: 13px;
+      color: white;
       border: 1px solid rgba(0,0,0,0.22);
       text-shadow: 0 1px 2px rgba(0,0,0,0.4);
       box-shadow: inset 0 0 10px rgba(255,255,255,0.12);
@@ -77,13 +77,14 @@
       "Surely others too"
     ];
 
-    // Visible text rows, bottom-to-top support will be built under them.
     const targetRows = [19, 20, 21];
 
-    // Grid[row][col] = null or { ch, color, hidden }
-    const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    // Visible locked letters
+    const board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
 
-    // Shape library: 2 to 6 blocks, with rotations baked in as variants.
+    // Invisible support cells used only for collision
+    const support = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+
     const SHAPES = {
       2: [
         [[0,0],[1,0]],
@@ -96,49 +97,56 @@
         [[0,0],[1,0],[1,1]]
       ],
       4: [
-        [[0,0],[1,0],[2,0],[3,0]],             // I
+        [[0,0],[1,0],[2,0],[3,0]],
         [[0,0],[0,1],[0,2],[0,3]],
-        [[0,0],[1,0],[0,1],[1,1]],             // O
-        [[0,0],[1,0],[2,0],[1,1]],             // T
+        [[0,0],[1,0],[0,1],[1,1]],
+        [[0,0],[1,0],[2,0],[1,1]],
         [[1,0],[0,1],[1,1],[2,1]],
-        [[0,0],[1,0],[1,1],[2,1]],             // Z
-        [[1,0],[2,0],[0,1],[1,1]],             // S
-        [[0,0],[0,1],[1,1],[2,1]],             // J
-        [[2,0],[0,1],[1,1],[2,1]]              // L
+        [[0,0],[1,0],[1,1],[2,1]],
+        [[1,0],[2,0],[0,1],[1,1]],
+        [[0,0],[0,1],[1,1],[2,1]],
+        [[2,0],[0,1],[1,1],[2,1]]
       ],
       5: [
-        [[0,0],[1,0],[2,0],[3,0],[4,0]],       // I5
+        [[0,0],[1,0],[2,0],[3,0],[4,0]],
         [[0,0],[0,1],[0,2],[0,3],[0,4]],
-        [[0,0],[1,0],[2,0],[1,1],[1,2]],       // T5
+        [[0,0],[1,0],[2,0],[1,1],[1,2]],
         [[1,0],[0,1],[1,1],[2,1],[1,2]],
-        [[0,0],[1,0],[2,0],[0,1],[0,2]],       // L5
+        [[0,0],[1,0],[2,0],[0,1],[0,2]],
         [[0,0],[1,0],[2,0],[2,1],[2,2]],
-        [[0,0],[1,0],[1,1],[1,2],[2,2]],       // zig hook
+        [[0,0],[1,0],[1,1],[1,2],[2,2]],
         [[1,0],[2,0],[1,1],[0,2],[1,2]]
       ],
       6: [
-        [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0]], // I6
+        [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0]],
         [[0,0],[0,1],[0,2],[0,3],[0,4],[0,5]],
-        [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]], // rectangle 3x2
-        [[0,0],[1,0],[2,0],[1,1],[1,2],[1,3]], // tall T
-        [[0,0],[0,1],[0,2],[1,2],[2,2],[3,2]], // long L
+        [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]],
+        [[0,0],[1,0],[2,0],[1,1],[1,2],[1,3]],
+        [[0,0],[0,1],[0,2],[1,2],[2,2],[3,2]],
         [[0,0],[1,0],[1,1],[1,2],[2,2],[3,2]]
       ]
     };
 
-    // Exact horizontal docking footprint so every chunk lands on the intended row.
+    function normalize(shape) {
+      const minX = Math.min(...shape.map(([x]) => x));
+      const minY = Math.min(...shape.map(([,y]) => y));
+      return shape.map(([x, y]) => [x - minX, y - minY]);
+    }
+
+    function randomItem(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
     function dockShape(size) {
       return Array.from({ length: size }, (_, i) => [i, 0]);
     }
 
-    function normalize(shape) {
-      const minX = Math.min(...shape.map(c => c[0]));
-      const minY = Math.min(...shape.map(c => c[1]));
-      return shape.map(([x, y]) => [x - minX, y - minY]);
+    function shapeWidth(shape) {
+      return Math.max(...shape.map(([x]) => x)) + 1;
     }
 
-    function randomOf(arr) {
-      return arr[Math.floor(Math.random() * arr.length)];
+    function shapeHeight(shape) {
+      return Math.max(...shape.map(([,y]) => y)) + 1;
     }
 
     function chunkLine(line) {
@@ -156,80 +164,83 @@
           }
           size = remaining;
         } else {
-          const allowed = [2,3,4,5,6].filter(n => remaining - n !== 1);
-          size = randomOf(allowed);
+          const choices = [2,3,4,5,6].filter(n => remaining - n !== 1);
+          size = randomItem(choices);
         }
 
         parts.push({
           text: line.slice(i, i + size),
           start: i
         });
+
         i += size;
       }
 
       return parts;
     }
 
-    const lineMeta = haiku.map((line, i) => {
-      const startCol = Math.floor((COLS - line.length) / 2);
+    const lines = haiku.map((text, index) => {
+      const startCol = Math.floor((COLS - text.length) / 2);
+      const chunks = chunkLine(text);
+
       return {
-        lineIndex: i,
-        row: targetRows[i],
-        text: line,
+        index,
+        text,
+        row: targetRows[index],
         startCol,
-        chunks: chunkLine(line)
+        chunks
       };
     });
 
-    // Bottom-up order so upper lines can rest on lower ones.
-    const spawnOrder = [2, 1, 0];
     const placements = [];
+    const order = [2, 1, 0]; // bottom line first
 
-    for (const lineIndex of spawnOrder) {
-      const meta = lineMeta[lineIndex];
-      meta.chunks.forEach((chunk, chunkIndex) => {
+    for (const lineIndex of order) {
+      const line = lines[lineIndex];
+      for (const chunk of line.chunks) {
         placements.push({
           lineIndex,
-          chunkIndex,
-          row: meta.row,
-          col: meta.startCol + chunk.start,
+          row: line.row,
+          col: line.startCol + chunk.start,
           text: chunk.text,
           size: chunk.text.length,
-          color: COLORS[(placements.length) % COLORS.length]
+          color: COLORS[placements.length % COLORS.length]
         });
-      });
+      }
     }
 
-    const piecesPerLine = {};
-    const lockedPerLine = {};
-    lineMeta.forEach(meta => {
-      piecesPerLine[meta.lineIndex] = meta.chunks.length;
-      lockedPerLine[meta.lineIndex] = 0;
-    });
+    const pieceCountByLine = {};
+    const lockedCountByLine = {};
+    for (const line of lines) {
+      pieceCountByLine[line.index] = line.chunks.length;
+      lockedCountByLine[line.index] = 0;
+    }
 
     let currentPiece = null;
     let placementIndex = 0;
     let tick = 0;
     let finished = false;
 
-    function pieceCells(piece, x = piece.x, y = piece.y, shape = piece.shape) {
+    function cellsFor(piece, shape = piece.shape, x = piece.x, y = piece.y) {
       return shape.map(([dx, dy], i) => ({
         x: x + dx,
         y: y + dy,
-        ch: piece.text[i] ?? " "
+        ch: piece.letters[i] ?? " "
       }));
     }
 
-    function collides(piece, x = piece.x, y = piece.y, shape = piece.shape) {
-      return pieceCells(piece, x, y, shape).some(cell => {
-        if (cell.x < 0 || cell.x >= COLS || cell.y >= ROWS) return true;
-        if (cell.y < 0) return false;
-        return grid[cell.y][cell.x] !== null;
-      });
+    function blocked(x, y) {
+      if (x < 0 || x >= COLS || y >= ROWS) return true;
+      if (y < 0) return false;
+      return !!board[y][x] || support[y][x];
+    }
+
+    function canPlace(piece, shape = piece.shape, x = piece.x, y = piece.y) {
+      return cellsFor(piece, shape, x, y).every(cell => !blocked(cell.x, cell.y));
     }
 
     function move(piece, dx, dy) {
-      if (!collides(piece, piece.x + dx, piece.y + dy, piece.shape)) {
+      if (canPlace(piece, piece.shape, piece.x + dx, piece.y + dy)) {
         piece.x += dx;
         piece.y += dy;
         return true;
@@ -237,82 +248,65 @@
       return false;
     }
 
-    function rotateVariant(piece) {
-      if (piece.mode === "dock") return false;
-      const variants = SHAPES[piece.size];
-      if (!variants || variants.length < 2) return false;
+    function tryVariantChange(piece) {
+      if (piece.mode !== "fall") return false;
+      const options = SHAPES[piece.size];
+      if (!options || options.length < 2) return false;
 
-      const currentIndex = piece.variantIndex;
-      const nextIndex = (currentIndex + 1) % variants.length;
-      const nextShape = normalize(variants[nextIndex]);
-
-      const kicks = [0, -1, 1, -2, 2];
-      for (const kick of kicks) {
-        const nx = piece.x + kick;
-        if (!collides(piece, nx, piece.y, nextShape)) {
-          piece.variantIndex = nextIndex;
-          piece.shape = nextShape;
-          return true;
-        }
+      const next = normalize(randomItem(options));
+      if (canPlace(piece, next, piece.x, piece.y)) {
+        piece.shape = next;
+        return true;
       }
       return false;
     }
 
-    function switchToDock(piece) {
-      if (piece.mode === "dock") return;
-      const nextShape = dockShape(piece.size);
-      const kicks = [0, -1, 1, -2, 2, -3, 3];
+    function tryDock(piece) {
+      const dock = dockShape(piece.size);
 
-      for (const kick of kicks) {
-        const nx = piece.x + kick;
-        if (!collides(piece, nx, piece.y, nextShape)) {
-          piece.mode = "dock";
-          piece.shape = nextShape;
-          piece.x = nx;
-          return;
+      // Snap only when the final docked position is actually valid.
+      if (canPlace(piece, dock, piece.targetCol, piece.y)) {
+        piece.shape = dock;
+        piece.x = piece.targetCol;
+        piece.mode = "dock";
+        return true;
+      }
+
+      return false;
+    }
+
+    function addSupportForLine(lineIndexAbove, supportRow) {
+      const line = lines[lineIndexAbove];
+      for (let c = line.startCol; c < line.startCol + line.text.length; c++) {
+        if (!board[supportRow][c]) {
+          support[supportRow][c] = true;
         }
       }
     }
 
-    function addSupportsForUpperLine(completedLineIndex) {
-      // After line 2 finishes, add hidden support under line 1.
-      // After line 1 finishes, add hidden support under line 0.
-      if (completedLineIndex === 2) {
-        const upper = lineMeta[1];
-        const supportRow = lineMeta[2].row;
-        for (let c = upper.startCol; c < upper.startCol + upper.text.length; c++) {
-          if (grid[supportRow][c] === null) {
-            grid[supportRow][c] = { ch: "", color: "transparent", hidden: true };
-          }
-        }
+    function onLineCompleted(lineIndex) {
+      if (lineIndex === 2) {
+        addSupportForLine(1, 21);
       }
-
-      if (completedLineIndex === 1) {
-        const upper = lineMeta[0];
-        const supportRow = lineMeta[1].row;
-        for (let c = upper.startCol; c < upper.startCol + upper.text.length; c++) {
-          if (grid[supportRow][c] === null) {
-            grid[supportRow][c] = { ch: "", color: "transparent", hidden: true };
-          }
-        }
+      if (lineIndex === 1) {
+        addSupportForLine(0, 20);
       }
     }
 
     function lockPiece(piece) {
-      for (const cell of pieceCells(piece)) {
-        if (cell.y >= 0) {
-          grid[cell.y][cell.x] = {
+      for (const cell of cellsFor(piece)) {
+        if (cell.y >= 0 && cell.y < ROWS && cell.x >= 0 && cell.x < COLS) {
+          board[cell.y][cell.x] = {
             ch: cell.ch,
-            color: piece.color,
-            hidden: false
+            color: piece.color
           };
         }
       }
 
-      lockedPerLine[piece.lineIndex]++;
+      lockedCountByLine[piece.lineIndex] += 1;
 
-      if (lockedPerLine[piece.lineIndex] === piecesPerLine[piece.lineIndex]) {
-        addSupportsForUpperLine(piece.lineIndex);
+      if (lockedCountByLine[piece.lineIndex] === pieceCountByLine[piece.lineIndex]) {
+        onLineCompleted(piece.lineIndex);
       }
 
       currentPiece = null;
@@ -326,63 +320,74 @@
       if (placementIndex >= placements.length) return;
 
       const plan = placements[placementIndex++];
-      const variants = SHAPES[plan.size];
-      const variantIndex = Math.floor(Math.random() * variants.length);
-      const shape = normalize(variants[variantIndex]);
+      const fallShape = normalize(randomItem(SHAPES[plan.size]));
+      const maxSpawnX = Math.max(0, COLS - shapeWidth(fallShape));
+      const spawnX = Math.floor(Math.random() * (maxSpawnX + 1));
+      const spawnY = -shapeHeight(fallShape) - 1;
 
       currentPiece = {
-        x: Math.floor(Math.random() * Math.max(1, COLS - 6)),
-        y: -6,
-        shape,
-        variantIndex,
-        mode: "fall",
-        text: plan.text.split(""),
+        x: spawnX,
+        y: spawnY,
+        shape: fallShape,
+        letters: plan.text.split(""),
         color: plan.color,
+        size: plan.size,
         targetCol: plan.col,
         targetRow: plan.row,
-        lineIndex: plan.lineIndex
+        lineIndex: plan.lineIndex,
+        mode: "fall"
       };
 
-      while (collides(currentPiece) && currentPiece.x > 0) {
+      while (!canPlace(currentPiece) && currentPiece.x > 0) {
         currentPiece.x--;
       }
     }
 
     function aiStep(piece) {
-      // Show off the varied shapes while falling.
-      if (piece.mode === "fall" && tick % 7 === 0 && Math.random() < 0.55) {
-        rotateVariant(piece);
+      // Occasional shape changes while still falling
+      if (piece.mode === "fall" && tick % 8 === 0 && Math.random() < 0.45) {
+        tryVariantChange(piece);
       }
 
-      // Close to the destination row, switch to exact docking strip.
-      if (piece.y >= piece.targetRow - 4) {
-        switchToDock(piece);
+      // Steer roughly toward the target while falling
+      const centerX = piece.x + Math.floor(shapeWidth(piece.shape) / 2);
+      const targetCenter = piece.targetCol + Math.floor(piece.size / 2);
+
+      if (piece.mode === "fall") {
+        if (centerX < targetCenter) move(piece, 1, 0);
+        else if (centerX > targetCenter) move(piece, -1, 0);
       }
 
-      // Horizontal alignment.
-      if (piece.x < piece.targetCol) move(piece, 1, 0);
-      else if (piece.x > piece.targetCol) move(piece, -1, 0);
-
-      // Exact docking correction for the final approach.
-      if (piece.mode !== "dock" && Math.abs(piece.x - piece.targetCol) <= 2 && piece.y >= piece.targetRow - 6) {
-        switchToDock(piece);
+      // Near the destination, try to become the exact final text strip
+      if (piece.y >= piece.targetRow - 7) {
+        tryDock(piece);
       }
 
+      // Once docked, stay aligned exactly
+      if (piece.mode === "dock") {
+        piece.x = piece.targetCol;
+      }
+
+      // Gravity
       if (!move(piece, 0, 1)) {
+        // One more chance to dock before locking
+        if (piece.mode !== "dock" && tryDock(piece) && move(piece, 0, 1)) {
+          return;
+        }
         lockPiece(piece);
       }
     }
 
     function draw() {
-      boardEl.querySelectorAll(".live, .locked").forEach(el => el.remove());
+      boardEl.innerHTML = "";
 
       for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
-          const cell = grid[y][x];
-          if (!cell || cell.hidden) continue;
+          const cell = board[y][x];
+          if (!cell) continue;
 
           const el = document.createElement("div");
-          el.className = "cell locked";
+          el.className = "cell";
           el.textContent = cell.ch === " " ? "" : cell.ch;
           el.style.left = `${x * CELL}px`;
           el.style.top = `${y * CELL}px`;
@@ -392,11 +397,11 @@
       }
 
       if (currentPiece) {
-        for (const cell of pieceCells(currentPiece)) {
+        for (const cell of cellsFor(currentPiece)) {
           if (cell.y < 0) continue;
 
           const el = document.createElement("div");
-          el.className = "cell live";
+          el.className = "cell";
           el.textContent = cell.ch === " " ? "" : cell.ch;
           el.style.left = `${cell.x * CELL}px`;
           el.style.top = `${cell.y * CELL}px`;
@@ -418,10 +423,10 @@
       }
 
       draw();
-      requestAnimationFrame(() => setTimeout(loop, 90));
     }
 
-    loop();
+    draw();
+    setInterval(loop, 90);
   </script>
 </body>
 </html>
