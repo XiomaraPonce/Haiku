@@ -1,25 +1,416 @@
-<!doctype html>
 <html lang="en">
 <head>
-	<meta charset="utf-8">
-	<title>Haiku</title>
-	<link rel="stylesheet" href="./assets/css/styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetris Haiku</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      background: #0a0a0a;
+    }
+    body {
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      font-family: system-ui, sans-serif;
+    }
+    canvas {
+      display: block;
+      width: min(96vw, 860px);
+      height: auto;
+      background: #111;
+      border: 2px solid #2a2a2a;
+    }
+  </style>
 </head>
 <body>
-	<div class="grid-container">
-		<div>A</div>
-		<div>radiant</div>
-		<div class="last">Young</div>
-		<div>Woman</div>
-		<div>To</div>
-		<div>Light</div>
-		<div>The</div>
-		<div class="last">Darkest</div>
-		<div>Corners</div>
-		<div>Of</div>
-		<div class="last">Winter</div>
-	</div>
-	
-	<script src="./assets/js/main.js"></script>
+  <canvas id="board" aria-label="Tetris Haiku Animation"></canvas>
+
+  <script>
+    const COLS = 24;
+    const ROWS = 20;
+    const HIDDEN_ROWS = 4;
+    const VISIBLE_ROWS = ROWS - HIDDEN_ROWS;
+    const CELL = 28;
+    const PAD = 12;
+
+    const MESSAGE_ROWS = [
+      "   SOMETIMES I WONDER   ",
+      "IF I'M LIVING CORRECTLY ",
+      "   SURELY OTHERS TOO    "
+    ];
+
+    const SEQUENCE_TEMPLATE = [
+      {"shape":"O","x":0,"targetY":18,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"clear2"},
+      {"shape":"I","x":3,"targetY":19,"cells":[[0,0],[1,0],[2,0],[3,0]],"stage":"clear2"},
+      {"shape":"J","x":5,"targetY":18,"cells":[[0,0],[1,0],[2,0],[2,1]],"stage":"clear2"},
+      {"shape":"L","x":2,"targetY":18,"cells":[[0,0],[0,1],[1,0],[2,0]],"stage":"clear2"},
+      {"shape":"O","x":8,"targetY":18,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"clear2"},
+      {"shape":"J","x":12,"targetY":18,"cells":[[0,0],[0,1],[1,1],[2,1]],"stage":"clear2"},
+      {"shape":"O","x":10,"targetY":18,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"clear2"},
+      {"shape":"J","x":13,"targetY":18,"cells":[[0,0],[1,0],[2,0],[2,1]],"stage":"clear2"},
+      {"shape":"I","x":17,"targetY":19,"cells":[[0,0],[1,0],[2,0],[3,0]],"stage":"clear2"},
+      {"shape":"L","x":16,"targetY":18,"cells":[[0,0],[0,1],[1,0],[2,0]],"stage":"clear2"},
+      {"shape":"J","x":19,"targetY":18,"cells":[[0,0],[1,0],[2,0],[2,1]],"stage":"clear2"},
+      {"shape":"O","x":22,"targetY":18,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"clear2","clearRowsCount":2},
+
+      {"shape":"T","x":1,"targetY":18,"cells":[[0,1],[1,0],[1,1],[2,1]],"stage":"clear4"},
+      {"shape":"I","x":0,"targetY":16,"cells":[[0,0],[0,1],[0,2],[0,3]],"stage":"clear4"},
+      {"shape":"T","x":2,"targetY":16,"cells":[[0,1],[1,0],[1,1],[1,2]],"stage":"clear4"},
+      {"shape":"J","x":1,"targetY":16,"cells":[[0,0],[0,1],[0,2],[1,0]],"stage":"clear4"},
+      {"shape":"I","x":4,"targetY":16,"cells":[[0,0],[0,1],[0,2],[0,3]],"stage":"clear4"},
+      {"shape":"L","x":5,"targetY":18,"cells":[[0,1],[1,1],[2,0],[2,1]],"stage":"clear4"},
+      {"shape":"O","x":5,"targetY":17,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"clear4"},
+      {"shape":"J","x":5,"targetY":16,"cells":[[0,0],[1,0],[2,0],[2,1]],"stage":"clear4"},
+      {"shape":"T","x":9,"targetY":18,"cells":[[0,1],[1,0],[1,1],[2,1]],"stage":"clear4"},
+      {"shape":"I","x":8,"targetY":16,"cells":[[0,0],[0,1],[0,2],[0,3]],"stage":"clear4"},
+      {"shape":"T","x":9,"targetY":16,"cells":[[0,0],[0,1],[0,2],[1,1]],"stage":"clear4"},
+      {"shape":"L","x":10,"targetY":16,"cells":[[0,0],[1,0],[1,1],[1,2]],"stage":"clear4"},
+      {"shape":"J","x":12,"targetY":18,"cells":[[0,0],[0,1],[1,1],[2,1]],"stage":"clear4"},
+      {"shape":"I","x":15,"targetY":16,"cells":[[0,0],[0,1],[0,2],[0,3]],"stage":"clear4"},
+      {"shape":"J","x":13,"targetY":16,"cells":[[0,2],[1,0],[1,1],[1,2]],"stage":"clear4"},
+      {"shape":"O","x":12,"targetY":16,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"clear4"},
+      {"shape":"L","x":17,"targetY":17,"cells":[[0,0],[0,1],[0,2],[1,2]],"stage":"clear4"},
+      {"shape":"T","x":18,"targetY":17,"cells":[[0,1],[1,0],[1,1],[1,2]],"stage":"clear4"},
+      {"shape":"I","x":16,"targetY":16,"cells":[[0,0],[0,1],[0,2],[0,3]],"stage":"clear4"},
+      {"shape":"T","x":17,"targetY":16,"cells":[[0,0],[1,0],[1,1],[2,0]],"stage":"clear4"},
+      {"shape":"J","x":21,"targetY":18,"cells":[[0,0],[0,1],[1,1],[2,1]],"stage":"clear4"},
+      {"shape":"S","x":21,"targetY":16,"cells":[[0,0],[0,1],[1,1],[1,2]],"stage":"clear4"},
+      {"shape":"L","x":22,"targetY":16,"cells":[[0,0],[1,0],[1,1],[1,2]],"stage":"clear4"},
+      {"shape":"I","x":20,"targetY":16,"cells":[[0,0],[0,1],[0,2],[0,3]],"stage":"clear4","clearRowsCount":4},
+
+      {"shape":"J","x":0,"targetY":18,"cells":[[0,0],[0,1],[1,1],[2,1]],"stage":"message"},
+      {"shape":"Z","x":0,"targetY":17,"cells":[[0,0],[1,0],[1,1],[2,1]],"stage":"message"},
+      {"shape":"L","x":2,"targetY":17,"cells":[[0,0],[1,0],[1,1],[1,2]],"stage":"message"},
+      {"shape":"J","x":6,"targetY":17,"cells":[[0,2],[1,0],[1,1],[1,2]],"stage":"message"},
+      {"shape":"O","x":4,"targetY":18,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"message"},
+      {"shape":"J","x":4,"targetY":17,"cells":[[0,0],[1,0],[2,0],[2,1]],"stage":"message"},
+      {"shape":"L","x":8,"targetY":18,"cells":[[0,1],[1,1],[2,0],[2,1]],"stage":"message"},
+      {"shape":"O","x":8,"targetY":17,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"message"},
+      {"shape":"L","x":10,"targetY":17,"cells":[[0,0],[1,0],[1,1],[1,2]],"stage":"message"},
+      {"shape":"J","x":14,"targetY":17,"cells":[[0,2],[1,0],[1,1],[1,2]],"stage":"message"},
+      {"shape":"Z","x":13,"targetY":17,"cells":[[0,1],[0,2],[1,0],[1,1]],"stage":"message"},
+      {"shape":"J","x":12,"targetY":17,"cells":[[0,0],[0,1],[0,2],[1,0]],"stage":"message"},
+      {"shape":"L","x":16,"targetY":17,"cells":[[0,0],[0,1],[0,2],[1,2]],"stage":"message"},
+      {"shape":"J","x":18,"targetY":17,"cells":[[0,2],[1,0],[1,1],[1,2]],"stage":"message"},
+      {"shape":"O","x":17,"targetY":17,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"message"},
+      {"shape":"J","x":22,"targetY":17,"cells":[[0,2],[1,0],[1,1],[1,2]],"stage":"message"},
+      {"shape":"O","x":20,"targetY":18,"cells":[[0,0],[0,1],[1,0],[1,1]],"stage":"message"},
+      {"shape":"J","x":20,"targetY":17,"cells":[[0,0],[1,0],[2,0],[2,1]],"stage":"message"}
+    ];
+
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = COLS * CELL + PAD * 2;
+    canvas.height = VISIBLE_ROWS * CELL + PAD * 2;
+
+    let board = [];
+    let sequence = [];
+    let activePiece = null;
+    let nextIndex = 0;
+    let running = false;
+    let rafId = 0;
+    let clearingRows = [];
+    let flashOn = false;
+
+    function makeEmptyBoard() {
+      return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    }
+
+    function randomInt(max) {
+      return Math.floor(Math.random() * max);
+    }
+
+    function makePalette() {
+      const start = randomInt(360);
+      return Array.from({ length: 5 }, (_, i) => {
+        const hue = (start + i * 67 + randomInt(10)) % 360;
+        const sat = 70 + randomInt(14);
+        const light = 53 + randomInt(10);
+        return `hsl(${hue} ${sat}% ${light}%)`;
+      });
+    }
+
+    function buildSequence() {
+      const palette = makePalette();
+      return SEQUENCE_TEMPLATE.map(piece => ({
+        ...piece,
+        cells: piece.cells.map(([x, y]) => [x, y]),
+        color: palette[randomInt(palette.length)],
+      }));
+    }
+
+    function canPlace(piece, x, y) {
+      for (const [cx, cy] of piece.cells) {
+        const gx = x + cx;
+        const gy = y + cy;
+        if (gx < 0 || gx >= COLS || gy >= ROWS) return false;
+        if (gy >= 0 && board[gy][gx]) return false;
+      }
+      return true;
+    }
+
+    function findLandingY(piece) {
+      const maxCy = Math.max(...piece.cells.map(([, cy]) => cy));
+      let y = -maxCy - 2;
+      while (canPlace(piece, piece.x, y + 1)) y += 1;
+      return y;
+    }
+
+    function stampPiece(piece) {
+      for (const [cx, cy] of piece.cells) {
+        const gx = piece.x + cx;
+        const gy = piece.targetY + cy;
+        if (gy >= 0 && gy < ROWS) {
+          board[gy][gx] = piece.color;
+        }
+      }
+    }
+
+    function fullRows() {
+      const rows = [];
+      for (let y = 0; y < ROWS; y++) {
+        if (board[y].every(Boolean)) rows.push(y);
+      }
+      return rows;
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function clearRows(rows) {
+      clearingRows = [...rows];
+      for (let i = 0; i < 6; i++) {
+        flashOn = !flashOn;
+        draw();
+        await sleep(85);
+      }
+      flashOn = false;
+      clearingRows = [];
+
+      for (const row of [...rows].sort((a, b) => a - b)) {
+        board.splice(row, 1);
+        board.unshift(Array(COLS).fill(null));
+      }
+
+      draw();
+    }
+
+    function cellTopColor(color) {
+      return `color-mix(in srgb, ${color} 78%, white 22%)`;
+    }
+
+    function drawCell(x, y, color, clearing = false) {
+      const visibleY = y - HIDDEN_ROWS;
+      if (visibleY < 0 || visibleY >= VISIBLE_ROWS) return;
+
+      const px = PAD + x * CELL;
+      const py = PAD + visibleY * CELL;
+
+      ctx.fillStyle = clearing ? '#ffffff' : color;
+      ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+
+      ctx.fillStyle = clearing ? 'rgba(255,255,255,0.96)' : cellTopColor(color);
+      ctx.fillRect(px + 3, py + 3, CELL - 6, 5);
+      ctx.fillRect(px + 3, py + 3, 5, CELL - 6);
+
+      ctx.fillStyle = clearing ? 'rgba(190,190,190,0.95)' : 'rgba(0,0,0,0.28)';
+      ctx.fillRect(px + CELL - 8, py + 3, 5, CELL - 6);
+      ctx.fillRect(px + 3, py + CELL - 8, CELL - 6, 5);
+    }
+
+    function drawGrid() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(PAD, PAD, COLS * CELL, VISIBLE_ROWS * CELL);
+
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 1;
+
+      for (let x = 0; x <= COLS; x++) {
+        const px = PAD + x * CELL + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(px, PAD);
+        ctx.lineTo(px, PAD + VISIBLE_ROWS * CELL);
+        ctx.stroke();
+      }
+
+      for (let y = 0; y <= VISIBLE_ROWS; y++) {
+        const py = PAD + y * CELL + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(PAD, py);
+        ctx.lineTo(PAD + COLS * CELL, py);
+        ctx.stroke();
+      }
+    }
+
+    function drawMessageLetters() {
+      const firstRow = ROWS - MESSAGE_ROWS.length;
+      ctx.save();
+      ctx.font = `bold ${Math.floor(CELL * 0.54)}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (let rowOffset = 0; rowOffset < MESSAGE_ROWS.length; rowOffset++) {
+        const y = firstRow + rowOffset;
+        const text = MESSAGE_ROWS[rowOffset];
+        for (let x = 0; x < COLS; x++) {
+          if (!board[y][x]) continue;
+          const ch = text[x] || ' ';
+          if (ch === ' ') continue;
+
+          const visibleY = y - HIDDEN_ROWS;
+          if (visibleY < 0 || visibleY >= VISIBLE_ROWS) continue;
+
+          const px = PAD + x * CELL + CELL / 2;
+          const py = PAD + visibleY * CELL + CELL / 2 + 1;
+
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          ctx.fillText(ch.toUpperCase(), px + 1, py + 1);
+
+          ctx.fillStyle = 'rgba(255,255,255,0.94)';
+          ctx.fillText(ch.toUpperCase(), px, py);
+        }
+      }
+      ctx.restore();
+    }
+
+    function draw() {
+      drawGrid();
+
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const color = board[y][x];
+          if (!color) continue;
+          const clearing = flashOn && clearingRows.includes(y);
+          drawCell(x, y, color, clearing);
+        }
+      }
+
+      if (activePiece) {
+        for (const [cx, cy] of activePiece.cells) {
+          const gy = activePiece.yFloat + cy;
+          if (gy < 0) continue;
+          drawCell(activePiece.x + cx, gy, activePiece.color, false);
+        }
+      }
+
+      drawMessageLetters();
+    }
+
+    function ease(t) {
+      return t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function spawnNext(now) {
+      if (nextIndex >= sequence.length) {
+        activePiece = null;
+        running = false;
+        draw();
+        return;
+      }
+
+      const piece = sequence[nextIndex++];
+      const landingY = findLandingY(piece);
+      const maxCy = Math.max(...piece.cells.map(([, cy]) => cy));
+      const startY = -maxCy - 2;
+
+      activePiece = {
+        ...piece,
+        targetY: landingY,
+        startY,
+        yFloat: startY,
+        startTime: now,
+        duration: Math.max(300, 190 + (landingY - startY) * 42),
+      };
+    }
+
+    async function lockActivePiece() {
+      const piece = activePiece;
+      if (!piece) return;
+
+      activePiece = null;
+      stampPiece(piece);
+      draw();
+
+      if (piece.clearRowsCount) {
+        await sleep(120);
+        const rows = fullRows();
+        if (rows.length) {
+          await clearRows(rows);
+        }
+      }
+
+      if (nextIndex >= sequence.length) {
+        running = false;
+        draw();
+        return;
+      }
+
+      await sleep(90);
+      if (running) {
+        rafId = requestAnimationFrame(animate);
+      }
+    }
+
+    function animate(now) {
+      if (!running) {
+        draw();
+        return;
+      }
+
+      if (!activePiece) {
+        spawnNext(now);
+      }
+
+      if (activePiece) {
+        const t = Math.min(1, (now - activePiece.startTime) / activePiece.duration);
+        const v = ease(t);
+        activePiece.yFloat = activePiece.startY + (activePiece.targetY - activePiece.startY) * v;
+      }
+
+      draw();
+
+      if (activePiece && activePiece.yFloat >= activePiece.targetY - 0.001) {
+        lockActivePiece();
+        return;
+      }
+
+      rafId = requestAnimationFrame(animate);
+    }
+
+    function verifyNoConsecutiveRepeats() {
+      for (let i = 1; i < sequence.length; i++) {
+        if (sequence[i].shape === sequence[i - 1].shape) {
+          throw new Error('Sequence has consecutive repeated shapes.');
+        }
+      }
+    }
+
+    function start() {
+      cancelAnimationFrame(rafId);
+      board = makeEmptyBoard();
+      sequence = buildSequence();
+      verifyNoConsecutiveRepeats();
+      nextIndex = 0;
+      activePiece = null;
+      clearingRows = [];
+      flashOn = false;
+      running = true;
+      draw();
+      rafId = requestAnimationFrame(animate);
+    }
+
+    start();
+  </script>
 </body>
 </html>
