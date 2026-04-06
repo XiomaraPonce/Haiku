@@ -79,153 +79,228 @@
 
     const targetRows = [19, 20, 21];
 
-    // Visible locked letters
     const board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-
-    // Invisible support cells used only for collision
     const support = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
 
-    const SHAPES = {
-      2: [
-        [[0,0],[1,0]],
-        [[0,0],[0,1]]
-      ],
-      3: [
-        [[0,0],[1,0],[2,0]],
-        [[0,0],[0,1],[0,2]],
-        [[0,0],[1,0],[0,1]],
-        [[0,0],[1,0],[1,1]]
-      ],
-      4: [
-        [[0,0],[1,0],[2,0],[3,0]],
-        [[0,0],[0,1],[0,2],[0,3]],
-        [[0,0],[1,0],[0,1],[1,1]],
-        [[0,0],[1,0],[2,0],[1,1]],
-        [[1,0],[0,1],[1,1],[2,1]],
-        [[0,0],[1,0],[1,1],[2,1]],
-        [[1,0],[2,0],[0,1],[1,1]],
-        [[0,0],[0,1],[1,1],[2,1]],
-        [[2,0],[0,1],[1,1],[2,1]]
-      ],
-      5: [
-        [[0,0],[1,0],[2,0],[3,0],[4,0]],
-        [[0,0],[0,1],[0,2],[0,3],[0,4]],
-        [[0,0],[1,0],[2,0],[1,1],[1,2]],
-        [[1,0],[0,1],[1,1],[2,1],[1,2]],
-        [[0,0],[1,0],[2,0],[0,1],[0,2]],
-        [[0,0],[1,0],[2,0],[2,1],[2,2]],
-        [[0,0],[1,0],[1,1],[1,2],[2,2]],
-        [[1,0],[2,0],[1,1],[0,2],[1,2]]
-      ],
-      6: [
-        [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0]],
-        [[0,0],[0,1],[0,2],[0,3],[0,4],[0,5]],
-        [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]],
-        [[0,0],[1,0],[2,0],[1,1],[1,2],[1,3]],
-        [[0,0],[0,1],[0,2],[1,2],[2,2],[3,2]],
-        [[0,0],[1,0],[1,1],[1,2],[2,2],[3,2]]
-      ]
-    };
+    const SHAPES = [
+      { name: "D2", cells: [[0,0],[1,0]] },
 
-    function normalize(shape) {
-      const minX = Math.min(...shape.map(([x]) => x));
-      const minY = Math.min(...shape.map(([,y]) => y));
-      return shape.map(([x, y]) => [x - minX, y - minY]);
+      { name: "I3", cells: [[0,0],[1,0],[2,0]] },
+      { name: "L3", cells: [[0,0],[0,1],[1,1]] },
+
+      { name: "O4", cells: [[0,0],[1,0],[0,1],[1,1]] },
+      { name: "I4", cells: [[0,0],[1,0],[2,0],[3,0]] },
+      { name: "T4", cells: [[0,0],[1,0],[2,0],[1,1]] },
+      { name: "L4", cells: [[0,0],[0,1],[0,2],[1,2]] },
+
+      { name: "Wide4_5", cells: [[0,0],[1,0],[2,0],[3,0],[0,1]] },
+      { name: "I5", cells: [[0,0],[1,0],[2,0],[3,0],[4,0]] },
+      { name: "T5", cells: [[0,0],[1,0],[2,0],[1,1],[1,2]] },
+      { name: "U5", cells: [[0,0],[2,0],[0,1],[1,1],[2,1]] },
+
+      { name: "Wide5_6", cells: [[0,0],[1,0],[2,0],[3,0],[4,0],[0,1]] },
+      { name: "I6", cells: [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0]] },
+      { name: "Rect6", cells: [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]] }
+    ];
+
+    function normalizeBlocks(blocks) {
+      const minX = Math.min(...blocks.map(b => b.x));
+      const minY = Math.min(...blocks.map(b => b.y));
+      return blocks.map(b => ({ ...b, x: b.x - minX, y: b.y - minY }));
     }
 
-    function randomItem(arr) {
+    function rotateCW(blocks) {
+      return normalizeBlocks(
+        blocks.map(b => ({ ...b, x: b.y, y: -b.x }))
+      );
+    }
+
+    function sameFootprint(a, b) {
+      if (a.length !== b.length) return false;
+      const sa = a.map(c => `${c.x},${c.y}`).sort().join("|");
+      const sb = b.map(c => `${c.x},${c.y}`).sort().join("|");
+      return sa === sb;
+    }
+
+    function uniqueRotations(baseCells) {
+      const rotations = [];
+      let current = normalizeBlocks(baseCells.map(([x, y]) => ({ x, y })));
+
+      for (let i = 0; i < 4; i++) {
+        if (!rotations.some(r => sameFootprint(r, current))) {
+          rotations.push(current.map(c => ({ x: c.x, y: c.y })));
+        }
+        current = rotateCW(current);
+      }
+
+      return rotations;
+    }
+
+    function bottomInfo(cells) {
+      const maxY = Math.max(...cells.map(c => c.y));
+      const bottom = cells
+        .filter(c => c.y === maxY)
+        .map(c => c.x)
+        .sort((a, b) => a - b);
+
+      const contiguous = bottom.every((x, i) => i === 0 || x === bottom[i - 1] + 1);
+
+      return {
+        maxY,
+        bottomXs: bottom,
+        count: bottom.length,
+        contiguous,
+        minBottomX: bottom[0]
+      };
+    }
+
+    const CANDIDATES_BY_TEXT_WIDTH = { 2: [], 3: [], 4: [], 5: [], 6: [] };
+
+    for (const shape of SHAPES) {
+      const rots = uniqueRotations(shape.cells);
+
+      rots.forEach((rot, rotIndex) => {
+        const info = bottomInfo(rot);
+        if (info.contiguous && info.count >= 2 && info.count <= 6) {
+          CANDIDATES_BY_TEXT_WIDTH[info.count].push({
+            name: shape.name,
+            rotations: rots,
+            targetRotationIndex: rotIndex,
+            targetCells: rot
+          });
+        }
+      });
+    }
+
+    function rand(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
     }
 
-    function dockShape(size) {
-      return Array.from({ length: size }, (_, i) => [i, 0]);
-    }
+    function weightedChunkSize(remaining) {
+      const options = [2, 3, 4, 5, 6].filter(n => n <= remaining && remaining - n !== 1);
 
-    function shapeWidth(shape) {
-      return Math.max(...shape.map(([x]) => x)) + 1;
-    }
+      const weights = options.map(n => {
+        if (remaining > 10) {
+          if (n === 2) return 4;
+          if (n === 3) return 5;
+          if (n === 4) return 4;
+          if (n === 5) return 2;
+          return 1;
+        }
+        if (n === 2) return 3;
+        if (n === 3) return 4;
+        if (n === 4) return 3;
+        if (n === 5) return 2;
+        return 1;
+      });
 
-    function shapeHeight(shape) {
-      return Math.max(...shape.map(([,y]) => y)) + 1;
+      const total = weights.reduce((a, b) => a + b, 0);
+      let r = Math.random() * total;
+
+      for (let i = 0; i < options.length; i++) {
+        r -= weights[i];
+        if (r <= 0) return options[i];
+      }
+
+      return options[0];
     }
 
     function chunkLine(line) {
-      const parts = [];
+      const chunks = [];
       let i = 0;
 
       while (i < line.length) {
         const remaining = line.length - i;
-        let size;
-
-        if (remaining <= 6) {
-          if (remaining === 1 && parts.length) {
-            parts[parts.length - 1].text += line.slice(i);
-            break;
-          }
-          size = remaining;
-        } else {
-          const choices = [2,3,4,5,6].filter(n => remaining - n !== 1);
-          size = randomItem(choices);
-        }
-
-        parts.push({
+        const size = weightedChunkSize(remaining);
+        chunks.push({
           text: line.slice(i, i + size),
-          start: i
+          start: i,
+          size
         });
-
         i += size;
       }
 
-      return parts;
+      return chunks;
     }
 
     const lines = haiku.map((text, index) => {
       const startCol = Math.floor((COLS - text.length) / 2);
-      const chunks = chunkLine(text);
-
       return {
         index,
         text,
         row: targetRows[index],
         startCol,
-        chunks
+        chunks: chunkLine(text)
       };
     });
 
     const placements = [];
-    const order = [2, 1, 0]; // bottom line first
+    const spawnOrder = [2, 1, 0];
 
-    for (const lineIndex of order) {
+    for (const lineIndex of spawnOrder) {
       const line = lines[lineIndex];
-      for (const chunk of line.chunks) {
+
+      line.chunks.forEach(chunk => {
+        const candidate = rand(CANDIDATES_BY_TEXT_WIDTH[chunk.size]);
+        const info = bottomInfo(candidate.targetCells);
+
+        const targetX = line.startCol + chunk.start - info.minBottomX;
+        const targetY = line.row - info.maxY;
+
+        const targetBlocks = candidate.targetCells.map(c => ({
+          x: c.x,
+          y: c.y,
+          ch: ""
+        }));
+
+        const bottomBlocks = targetBlocks
+          .filter(b => b.y === info.maxY)
+          .sort((a, b) => a.x - b.x);
+
+        chunk.text.split("").forEach((ch, i) => {
+          bottomBlocks[i].ch = ch;
+        });
+
         placements.push({
           lineIndex,
-          row: line.row,
-          col: line.startCol + chunk.start,
-          text: chunk.text,
-          size: chunk.text.length,
-          color: COLORS[placements.length % COLORS.length]
+          color: COLORS[placements.length % COLORS.length],
+          rotations: candidate.rotations,
+          targetBlocks,
+          targetX,
+          targetY
         });
-      }
+      });
     }
 
     const pieceCountByLine = {};
     const lockedCountByLine = {};
-    for (const line of lines) {
+    lines.forEach(line => {
       pieceCountByLine[line.index] = line.chunks.length;
       lockedCountByLine[line.index] = 0;
-    }
+    });
 
     let currentPiece = null;
     let placementIndex = 0;
-    let tick = 0;
     let finished = false;
+    let tick = 0;
 
-    function cellsFor(piece, shape = piece.shape, x = piece.x, y = piece.y) {
-      return shape.map(([dx, dy], i) => ({
-        x: x + dx,
-        y: y + dy,
-        ch: piece.letters[i] ?? " "
+    function widthOf(blocks) {
+      return Math.max(...blocks.map(b => b.x)) + 1;
+    }
+
+    function heightOf(blocks) {
+      return Math.max(...blocks.map(b => b.y)) + 1;
+    }
+
+    function cloneBlocks(blocks) {
+      return blocks.map(b => ({ x: b.x, y: b.y, ch: b.ch }));
+    }
+
+    function translateCells(piece, blocks = piece.blocks, x = piece.x, y = piece.y) {
+      return blocks.map(b => ({
+        x: x + b.x,
+        y: y + b.y,
+        ch: b.ch
       }));
     }
 
@@ -235,12 +310,12 @@
       return !!board[y][x] || support[y][x];
     }
 
-    function canPlace(piece, shape = piece.shape, x = piece.x, y = piece.y) {
-      return cellsFor(piece, shape, x, y).every(cell => !blocked(cell.x, cell.y));
+    function canPlace(piece, blocks = piece.blocks, x = piece.x, y = piece.y) {
+      return translateCells(piece, blocks, x, y).every(cell => !blocked(cell.x, cell.y));
     }
 
     function move(piece, dx, dy) {
-      if (canPlace(piece, piece.shape, piece.x + dx, piece.y + dy)) {
+      if (canPlace(piece, piece.blocks, piece.x + dx, piece.y + dy)) {
         piece.x += dx;
         piece.y += dy;
         return true;
@@ -248,53 +323,46 @@
       return false;
     }
 
-    function tryVariantChange(piece) {
-      if (piece.mode !== "fall") return false;
-      const options = SHAPES[piece.size];
-      if (!options || options.length < 2) return false;
+    function tryRotateCW(piece) {
+      const rotated = rotateCW(piece.blocks);
+      const kicks = [0, -1, 1, -2, 2];
 
-      const next = normalize(randomItem(options));
-      if (canPlace(piece, next, piece.x, piece.y)) {
-        piece.shape = next;
-        return true;
-      }
-      return false;
-    }
-
-    function tryDock(piece) {
-      const dock = dockShape(piece.size);
-
-      // Snap only when the final docked position is actually valid.
-      if (canPlace(piece, dock, piece.targetCol, piece.y)) {
-        piece.shape = dock;
-        piece.x = piece.targetCol;
-        piece.mode = "dock";
-        return true;
+      for (const kick of kicks) {
+        if (canPlace(piece, rotated, piece.x + kick, piece.y)) {
+          piece.blocks = rotated;
+          piece.x += kick;
+          return true;
+        }
       }
 
       return false;
     }
 
-    function addSupportForLine(lineIndexAbove, supportRow) {
+    function blocksMatchTarget(piece) {
+      return sameFootprint(
+        normalizeBlocks(piece.blocks.map(b => ({ x: b.x, y: b.y }))),
+        normalizeBlocks(piece.targetBlocks.map(b => ({ x: b.x, y: b.y })))
+      );
+    }
+
+    function supportLineFor(lineIndexAbove, supportRow) {
       const line = lines[lineIndexAbove];
-      for (let c = line.startCol; c < line.startCol + line.text.length; c++) {
-        if (!board[supportRow][c]) {
-          support[supportRow][c] = true;
+      for (let x = line.startCol; x < line.startCol + line.text.length; x++) {
+        if (!board[supportRow][x]) {
+          support[supportRow][x] = true;
         }
       }
     }
 
     function onLineCompleted(lineIndex) {
-      if (lineIndex === 2) {
-        addSupportForLine(1, 21);
-      }
-      if (lineIndex === 1) {
-        addSupportForLine(0, 20);
-      }
+      if (lineIndex === 2) supportLineFor(1, 21);
+      if (lineIndex === 1) supportLineFor(0, 20);
     }
 
     function lockPiece(piece) {
-      for (const cell of cellsFor(piece)) {
+      const cells = translateCells(piece);
+
+      for (const cell of cells) {
         if (cell.y >= 0 && cell.y < ROWS && cell.x >= 0 && cell.x < COLS) {
           board[cell.y][cell.x] = {
             ch: cell.ch,
@@ -303,39 +371,44 @@
         }
       }
 
-      lockedCountByLine[piece.lineIndex] += 1;
+      lockedCountByLine[piece.lineIndex]++;
 
       if (lockedCountByLine[piece.lineIndex] === pieceCountByLine[piece.lineIndex]) {
         onLineCompleted(piece.lineIndex);
       }
 
       currentPiece = null;
-
-      if (placementIndex >= placements.length) {
-        finished = true;
-      }
+      if (placementIndex >= placements.length) finished = true;
     }
 
     function spawnPiece() {
       if (placementIndex >= placements.length) return;
 
       const plan = placements[placementIndex++];
-      const fallShape = normalize(randomItem(SHAPES[plan.size]));
-      const maxSpawnX = Math.max(0, COLS - shapeWidth(fallShape));
-      const spawnX = Math.floor(Math.random() * (maxSpawnX + 1));
-      const spawnY = -shapeHeight(fallShape) - 1;
+
+      let spawnBlocks = cloneBlocks(plan.targetBlocks);
+      const randomTurns = Math.floor(Math.random() * 4);
+      for (let i = 0; i < randomTurns; i++) {
+        spawnBlocks = rotateCW(spawnBlocks);
+      }
+
+      const spawnWidth = widthOf(spawnBlocks);
+      const spawnHeight = heightOf(spawnBlocks);
+
+      const offsetChoices = [-5, -4, -3, 3, 4, 5, -2, 2, -1, 1, 0];
+      let spawnX = plan.targetX + rand(offsetChoices);
+      spawnX = Math.max(0, Math.min(COLS - spawnWidth, spawnX));
 
       currentPiece = {
-        x: spawnX,
-        y: spawnY,
-        shape: fallShape,
-        letters: plan.text.split(""),
-        color: plan.color,
-        size: plan.size,
-        targetCol: plan.col,
-        targetRow: plan.row,
         lineIndex: plan.lineIndex,
-        mode: "fall"
+        color: plan.color,
+        rotations: plan.rotations,
+        targetBlocks: cloneBlocks(plan.targetBlocks),
+        targetX: plan.targetX,
+        targetY: plan.targetY,
+        x: spawnX,
+        y: -spawnHeight - 1,
+        blocks: spawnBlocks
       };
 
       while (!canPlace(currentPiece) && currentPiece.x > 0) {
@@ -344,37 +417,33 @@
     }
 
     function aiStep(piece) {
-      // Occasional shape changes while still falling
-      if (piece.mode === "fall" && tick % 8 === 0 && Math.random() < 0.45) {
-        tryVariantChange(piece);
+      const centerNow = piece.x + piece.blocks.reduce((s, b) => s + b.x, 0) / piece.blocks.length;
+      const centerTarget = piece.targetX + piece.targetBlocks.reduce((s, b) => s + b.x, 0) / piece.targetBlocks.length;
+
+      const nearLanding = piece.y >= piece.targetY - 5;
+      const alignedX = piece.x === piece.targetX;
+      const alignedShape = blocksMatchTarget(piece);
+
+      if (nearLanding && !alignedShape) {
+        tryRotateCW(piece);
       }
 
-      // Steer roughly toward the target while falling
-      const centerX = piece.x + Math.floor(shapeWidth(piece.shape) / 2);
-      const targetCenter = piece.targetCol + Math.floor(piece.size / 2);
-
-      if (piece.mode === "fall") {
-        if (centerX < targetCenter) move(piece, 1, 0);
-        else if (centerX > targetCenter) move(piece, -1, 0);
+      if (Math.abs(centerNow - centerTarget) > 0.2) {
+        if (centerNow < centerTarget) move(piece, 1, 0);
+        else move(piece, -1, 0);
       }
 
-      // Near the destination, try to become the exact final text strip
-      if (piece.y >= piece.targetRow - 7) {
-        tryDock(piece);
+      if (nearLanding && alignedShape && !alignedX) {
+        if (piece.x < piece.targetX) move(piece, 1, 0);
+        else if (piece.x > piece.targetX) move(piece, -1, 0);
       }
 
-      // Once docked, stay aligned exactly
-      if (piece.mode === "dock") {
-        piece.x = piece.targetCol;
-      }
+      const shouldHover = nearLanding && (!blocksMatchTarget(piece) || piece.x !== piece.targetX);
 
-      // Gravity
-      if (!move(piece, 0, 1)) {
-        // One more chance to dock before locking
-        if (piece.mode !== "dock" && tryDock(piece) && move(piece, 0, 1)) {
-          return;
+      if (!shouldHover || tick % 2 === 0) {
+        if (!move(piece, 0, 1)) {
+          lockPiece(piece);
         }
-        lockPiece(piece);
       }
     }
 
@@ -388,24 +457,26 @@
 
           const el = document.createElement("div");
           el.className = "cell";
-          el.textContent = cell.ch === " " ? "" : cell.ch;
           el.style.left = `${x * CELL}px`;
           el.style.top = `${y * CELL}px`;
           el.style.background = cell.color;
+          el.textContent = cell.ch || "";
           boardEl.appendChild(el);
         }
       }
 
       if (currentPiece) {
-        for (const cell of cellsFor(currentPiece)) {
+        const cells = translateCells(currentPiece);
+
+        for (const cell of cells) {
           if (cell.y < 0) continue;
 
           const el = document.createElement("div");
           el.className = "cell";
-          el.textContent = cell.ch === " " ? "" : cell.ch;
           el.style.left = `${cell.x * CELL}px`;
           el.style.top = `${cell.y * CELL}px`;
           el.style.background = currentPiece.color;
+          el.textContent = cell.ch || "";
           boardEl.appendChild(el);
         }
       }
