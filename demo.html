@@ -29,15 +29,6 @@
       width: var(--w);
     }
 
-    #title {
-      text-align: center;
-      margin-bottom: 10px;
-      font-size: 13px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      opacity: 0.8;
-    }
-
     #board {
       position: relative;
       width: var(--w);
@@ -69,13 +60,6 @@
       user-select: none;
     }
 
-    .ghost {
-      color: rgba(255,255,255,0.12);
-      border: none;
-      box-shadow: none;
-      text-shadow: none;
-    }
-
     #caption {
       text-align: center;
       margin-top: 10px;
@@ -86,9 +70,7 @@
 </head>
 <body>
   <div id="wrap">
-    <div id="title">Haiku assembled by falling tetrominoes</div>
     <div id="board"></div>
-    <div id="caption">Real grid, collisions, rotation, locking.</div>
   </div>
 
   <script>
@@ -111,26 +93,8 @@
     // Grid[row][col] = null or { ch, color, hidden }
     const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
 
-    // Faint target text preview
     const targetRows = [19, 20, 21];
     const placements = [];
-
-    function addGhostText(line, row) {
-      const startCol = Math.floor((COLS - line.length) / 2);
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === " ") continue;
-
-        const ghost = document.createElement("div");
-        ghost.className = "cell ghost";
-        ghost.textContent = ch;
-        ghost.style.left = `${(startCol + i) * CELL}px`;
-        ghost.style.top = `${row * CELL}px`;
-        boardEl.appendChild(ghost);
-      }
-    }
-
-    haiku.forEach((line, i) => addGhostText(line, targetRows[i]));
 
     // Invisible support blocks so the centered text can stack naturally.
     grid[21][0] = { hidden: true };
@@ -177,7 +141,7 @@
       return shape.map(([dx, dy], i) => ({
         x: x + dx,
         y: y + dy,
-        ch: piece.letters[i]
+        ch: piece.letters[i] || ""
       }));
     }
 
@@ -244,39 +208,32 @@
         targetRow: plan.targetRow
       };
 
-      // Keep spawn legal.
       while (collides(currentPiece) && currentPiece.x > 0) {
         currentPiece.x--;
       }
     }
 
     function aiStep(piece) {
-      // Rotate to horizontal shortly before landing.
       if (piece.rot === "v" && piece.y >= piece.targetRow - 4) {
         rotate(piece);
       } else if (piece.rot === "v" && tick % 8 === 0) {
-        // occasional early rotation attempts for visible motion
         rotate(piece);
-        if (piece.rot === "h") rotate(piece); // often rotate back
+        if (piece.rot === "h") rotate(piece);
       }
 
-      // Once horizontal, steer toward the target column.
       if (piece.rot === "h") {
         if (piece.x < piece.targetCol) move(piece, 1, 0);
         else if (piece.x > piece.targetCol) move(piece, -1, 0);
       } else {
-        // While vertical, drift generally toward target.
         const targetX = piece.targetCol + 1;
         if (piece.x < targetX) move(piece, 1, 0);
         else if (piece.x > targetX) move(piece, -1, 0);
       }
 
-      // Make sure it's horizontal before final settle.
       if (piece.y >= piece.targetRow - 2 && piece.rot !== "h") {
         rotate(piece);
       }
 
-      // Gravity
       if (!move(piece, 0, 1)) {
         lockPiece(piece);
       }
@@ -285,7 +242,6 @@
     function draw() {
       boardEl.querySelectorAll(".live, .locked").forEach(el => el.remove());
 
-      // locked grid
       for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
           const cell = grid[y][x];
@@ -301,7 +257,6 @@
         }
       }
 
-      // live piece
       if (currentPiece) {
         for (const cell of pieceCells(currentPiece)) {
           if (cell.y < 0) continue;
